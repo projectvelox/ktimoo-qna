@@ -16,15 +16,18 @@ namespace Microsoft.BotBuilderSamples.Bots
         protected readonly BotState ConversationState;
         protected readonly Microsoft.Bot.Builder.Dialogs.Dialog Dialog;
         protected readonly BotState UserState;
+        private readonly IConfiguration _configuration;
 
-        public QnABot(ConversationState conversationState, UserState userState, T dialog)
+        public QnABot(ConversationState conversationState, UserState userState, T dialog, IConfiguration configuration)
         {
             ConversationState = conversationState;
             UserState = userState;
             Dialog = dialog;
+
+            _configuration = configuration;
         }
 
-        public override async Task OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken = default)
+        public override async Task OnTurnAsync(ITurnContext turnContext, CancellationToken cancellationToken)
         {
             await base.OnTurnAsync(turnContext, cancellationToken);
 
@@ -33,9 +36,54 @@ namespace Microsoft.BotBuilderSamples.Bots
             await UserState.SaveChangesAsync(turnContext, false, cancellationToken);
         }
 
-        protected override async Task OnMessageActivityAsync(ITurnContext<IMessageActivity> turnContext, CancellationToken cancellationToken) =>
-            // Run the Dialog with the new message Activity.
-            await Dialog.RunAsync(turnContext, ConversationState.CreateProperty<DialogState>(nameof(DialogState)), cancellationToken);
+        protected override async Task OnMessageActivityAsync(ITurnContext<IMessageActivity> turnContext, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var httpClient = new HttpClient();
+
+                var qnaMaker = new QnAMaker(new QnAMakerEndpoint
+                {
+                    KnowledgeBaseId = _configuration["QnAKnowledgebaseId"],
+                    EndpointKey = _configuration["QnAEndpointKey"],
+                    Host = GetHostname(_configuration["QnAEndpointHostName"])
+                },
+                null,
+                httpClient);
+
+                var options = new QnAMakerOptions { Top = 1 };
+
+                // The actual call to the QnA Maker service.
+                var response = await qnaMaker.GetAnswersAsync(turnContext, options);
+
+                IActivity replyActivity = MessageFactory.Text($"{response[0].Answer}");
+
+                // Replace with your own condition for bot escalation
+                if (turnContext.Activity.Text.Equals("escalate", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    Dictionary<string, object> contextVars = new Dictionary<string, object>() { { "BotHandoffTopic", "CreditCard" } };
+                    OmnichannelBotClient.AddEscalationContext(replyActivity, contextVars);
+                }
+                // Replace with your own condition for bot end conversation
+                else if (turnContext.Activity.Text.Equals("endconversation", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    OmnichannelBotClient.AddEndConversationContext(replyActivity);
+                }
+                // Call method BridgeBotMessage for every response that needs to be delivered to the customer.
+                else
+                {
+                    OmnichannelBotClient.BridgeBotMessage(replyActivity);
+                }
+
+                await turnContext.SendActivityAsync(replyActivity, cancellationToken);
+
+            }
+
+            catch (Exception ex)
+            {
+                await turnContext.SendActivityAsync(MessageFactory.Text(ex.ToString()), cancellationToken);
+            }
+        }
 
         protected override async Task OnMembersAddedAsync(IList<ChannelAccount> membersAdded, ITurnContext<IConversationUpdateActivity> turnContext, CancellationToken cancellationToken)
         {
@@ -46,6 +94,20 @@ namespace Microsoft.BotBuilderSamples.Bots
                     await turnContext.SendActivityAsync(MessageFactory.Text($"Hello and welcome!"), cancellationToken);
                 }
             }
+        }
+        private static string GetHostname(string hostname)
+        {
+            if (!hostname.StartsWith("https://"))
+            {
+                hostname = string.Concat("https://", hostname);
+            }
+
+            if (!hostname.EndsWith("/qnamaker"))
+            {
+                hostname = string.Concat(hostname, "/qnamaker");
+            }
+
+            return hostname;
         }
     }
 }
