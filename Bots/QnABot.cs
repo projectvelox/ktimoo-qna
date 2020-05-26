@@ -102,7 +102,7 @@ namespace Microsoft.BotBuilderSamples.Bots
                 if (member.Id != turnContext.Activity.Recipient.Id)
                 {
                     OmnichannelBotClient.BridgeBotMessage(turnContext.Activity);
-                    await turnContext.SendActivityAsync(MessageFactory.Text($"Hello and welcome!"), cancellationToken);
+                    await turnContext.SendActivityAsync(MessageFactory.Text($"Hello! welcome!"), cancellationToken);
                 }
             }
         }
