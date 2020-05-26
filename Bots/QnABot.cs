@@ -52,9 +52,9 @@ namespace Microsoft.BotBuilderSamples.Bots
 
                 var qnaMaker = new QnAMaker(new QnAMakerEndpoint
                 {
-                    KnowledgeBaseId = _configuration["QnAKnowledgebaseId"],
-                    EndpointKey = _configuration["QnAEndpointKey"],
-                    Host = GetHostname(_configuration["QnAEndpointHostName"])
+                    KnowledgeBaseId = "461a9694-ee84-4423-b283-600e2e978b0c", //_configuration["QnAKnowledgebaseId"],
+                    EndpointKey = "39b9495c-b1a8-4a87-ac23-ad566a40dd80", //_configuration["QnAEndpointKey"],
+                    Host = GetHostname("mooqna.azurewebsites.net")//_configuration["QnAEndpointHostName"])
                 },
                 null,
                 httpClient);
